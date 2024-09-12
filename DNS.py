@@ -4,8 +4,8 @@ import re
 import sys
 import time
 def network():
-    os.popen("netsh interface ip set dns 以太网 source=static addr=119.29.29.29")
-    os.popen("netsh interface ip add dns 以太网 addr=8.8.8.8")
+    os.popen("netsh interface ip set dns 以太网 source=static addr=222.222.222.222")
+    os.popen("netsh interface ip add dns 以太网 addr=222.222.202.202")
     os.popen("netsh interface ip set dns 本地连接 source=static addr=119.29.29.29")
     os.popen("netsh interface ip add dns 本地连接 addr=8.8.8.8")
 def caiwu_network():
