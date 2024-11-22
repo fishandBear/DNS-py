@@ -1,73 +1,98 @@
-# -*- coding: utf-8 -*-
-import os
-import re
-import sys
-import time
 import ctypes
-def network():
-    os.popen("netsh interface ip set dns 以太网 source=static addr=222.222.222.222")
-    os.popen("netsh interface ip add dns 以太网 addr=222.222.202.202 index=2")
-    os.popen("netsh interface ip set dns 本地连接 source=static addr=119.29.29.29")
-    os.popen("netsh interface ip add dns 本地连接 addr=8.8.8.8 index=2")
-def caiwu_network():
-    os.popen("netsh interface ip set dns 以太网 source=static addr=172.168.192.222")
-    os.popen("netsh interface ip add dns 以太网 addr=172.168.254.31 index=2")
-    os.popen("netsh interface ip set dns 本地连接 source=static addr=172.168.192.222")
-    os.popen("netsh interface ip add dns 本地连接 addr=172.168.254.31 index=2")
+import subprocess
+import sys
+import re
 
-
-
-def DNS():
-    cmd = 'ipconfig/all'
-    res = os.popen(cmd)
-    output_str = res.read()  # 获得输出字符串
-
-
-    re_str_ip = re.findall(r'172.\d+.\d+.\d+', output_str)#匹配ip
-    if len(re_str_ip):
-        print("你现在处于财政网")
-    else:
-        print("你现在处于外网")
-
-    use_in = input("输入 1 切外网 ||  输入 2 切财政专网：") #use是字符串
-    if use_in != '1' and use_in != '2':
-        print(use_in)
-        print("亲爱的你在输入什么？？？")
-        time.sleep(5)
-        sys.exit()
-
-    if use_in == '1':
-        network()
-    elif use_in == '2':
-        caiwu_network()
-    os.popen("ipconfig/flushdns")
-    time.sleep(3)
 
 def is_admin():
-    """
-    检查当前是否具有管理员权限。
-    """
+    """检查当前是否以管理员权限运行"""
     try:
         return ctypes.windll.shell32.IsUserAnAdmin()
     except:
         return False
 
-def run_as_admin():
-    """
-    如果不是管理员权限，重新以管理员身份运行当前脚本。
-    """
+
+def request_admin():
+    """直接申请管理员权限"""
     if not is_admin():
-        try:
-            # 以管理员身份重新运行当前脚本
-            ctypes.windll.shell32.ShellExecuteW(
-                None, "runas", sys.executable, " ".join(sys.argv), None, 1
-            )
-        except Exception as e:
-            print(f"无法以管理员权限运行: {e}")
-        sys.exit(0)
+        ctypes.windll.shell32.ShellExecuteW(
+            None, "runas", sys.executable, " ".join(sys.argv), None, 1
+        )
+        sys.exit()
 
 
+def get_adapter_name():
+    """检索网卡名称"""
+    try:
+        result = subprocess.run(
+            ["netsh", "interface", "show", "interface"],
+            capture_output=True,
+            text=True,
+        )
+        interfaces = re.findall(r"^\s*.*?\s+.*?\s+.*?\s+(以太网|本地连接.*)$", result.stdout, re.I | re.M)
+        if interfaces:
+            return interfaces[0]
+        else:
+            print("未找到符合条件的网卡名称，请检查您的网络适配器！")
+            sys.exit(1)
+    except Exception as e:
+        print("获取网卡名称时出错:", e)
+        sys.exit(1)
 
-while True:
-    run_as_admin()
-    DNS()
+
+def check_in():
+    try:
+        result = subprocess.run(
+            "ipconfig /all",
+            shell=True,
+            capture_output=True,
+            text=True,
+        )
+        output_str = result.stdout
+        re_str_ip = re.findall(r"172.\d+.\d+.\d+", output_str)
+        if len(re_str_ip):
+            return "你现在处于财务网"
+        else:
+            return "你现在处于外网"
+    except Exception as e:
+        print("获取网络信息出错:", e)
+        return "未知网络状态"
+
+
+def set_dns(adapter_name, primary_dns, secondary_dns):
+    """设置 DNS 地址"""
+    try:
+        subprocess.run(
+            ["netsh", "interface", "ip", "set", "dns", adapter_name, "static", primary_dns],
+            check=True,
+        )
+        subprocess.run(
+            ["netsh", "interface", "ip", "add", "dns", adapter_name, secondary_dns, "index=2"],
+            check=True,
+        )
+        print(f"DNS 已切换为：主 {primary_dns}，备用 {secondary_dns}")
+    except subprocess.CalledProcessError as e:
+        print("设置 DNS 时出错:", e)
+
+
+def main():
+    while True:
+        adapter_name = get_adapter_name()
+        print(f"已检索到网卡名称: {adapter_name}")
+        print("请选择 DNS 配置:")
+        print("1.---互联网")
+        print("2.---财务专网")
+        choice = input("请输入选项 (1 或 2): ")
+
+        if choice == "1":
+            set_dns(adapter_name, "222.222.222.222", "114.114.114.144")
+        elif choice == "2":
+            set_dns(adapter_name, "172.168.192.222", "172.168.254.31")
+        else:
+            print("无效选项，请重新运行程序。")
+
+
+if __name__ == "__main__":
+    request_admin()
+    print("当前程序已以管理员权限运行。")
+    main()
